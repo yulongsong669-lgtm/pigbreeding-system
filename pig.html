@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>猪只详情</h2>
+
+<div class="pig-info" style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+    <p><b>耳号:</b> {{ pig.ear_tag }}</p>
+    <p><b>性别:</b> {{ pig.sex }}</p>
+    <p><b>品种:</b> {{ pig.breed }}</p>
+    <p><b>出生日期:</b> {{ pig.birth_date }}</p>
+    
+    <!--  日龄显示 -->
+    <p><b>日龄:</b> {{ pig.birth_date | get_age }} 天</p>
+    
+    <!--  所属厂区 -->
+    <p><b>所属厂区:</b> <span class="badge bg-primary">{{ farm_name }}</span></p>
+    
+    <!--  近交系数 -->
+    <p><b>近交系数:</b> 
+        {% if pig.inbreeding > 0.05 %}
+            <span class="text-danger fw-bold">{{ "%.4f"|format(pig.inbreeding) }}</span>
+        {% else %}
+            <span class="text-muted">{{ "%.4f"|format(pig.inbreeding or 0) }}</span>
+        {% endif %}
+    </p>
+
+    {% if pig.notes %}
+    <p><b>备注:</b> {{ pig.notes }}</p>
+    {% endif %}
+</div>
+<hr>
+
+<!-- 系谱树部分 -->
+<h3>系谱树 (从左向右)</h3>
+<!-- -->
+<div id="pedigreeTree" style="width:100%; height:600px; border:1px solid #eee; overflow:hidden; background-color: #fafafa;"></div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+async function loadPedigreeTree(pig_id) {
+    const res = await fetch(`/pedigree/${pig_id}`);
+    const data = await res.json();
+
+    // 清空旧图表
+    const container = document.getElementById("pedigreeTree");
+    container.innerHTML = ""; 
+
+    const width = 1200; // 画布宽度
+    const height = 600; // 画布高度
+
+    // 1. 创建 SVG 和 缩放行为
+    const svg = d3.select("#pedigreeTree").append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .call(d3.zoom().on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        }))
+        .append("g"); // 这个 g 是被缩放的主容器
+
+    const g = svg.append("g")
+        .attr("transform", "translate(80,0)"); // 初始左边距
+
+    // 2. 数据处理
+    const root = d3.hierarchy(data);
+
+    // 3. 树布局配置
+    // nodeSize([垂直间距, 水平间距])
+    // 垂直间距设为 40，水平间距设为 180 (每一代的距离)
+    const treeLayout = d3.tree().nodeSize([40, 180]);
+    treeLayout(root);
+
+    // 4. 绘制连线 (水平贝塞尔曲线)
+    // 注意：d3.linkHorizontal 默认是 x,y。因为我们要横着画，所以逻辑上要把树的深度映射到 x
+    // d3.tree 计算出的 x 是垂直分布，y 是水平深度。我们需要在绘制时交换坐标显示。
+    
+    g.selectAll('path')
+        .data(root.links())
+        .enter()
+        .append('path')
+        .attr('d', d3.linkHorizontal()
+            .x(d => d.y) // 树的 y (深度) -> 屏幕的 x (横向)
+            .y(d => d.x) // 树的 x (分布) -> 屏幕的 y (纵向)
+        )
+        .attr('fill', 'none')
+        .attr('stroke', '#999')
+        .attr('stroke-width', 1.5);
+
+    // 5. 绘制节点
+    const nodes = g.selectAll('g.node')
+        .data(root.descendants())
+        .enter()
+        .append('g')
+        .attr('class', 'node')
+        // 变换坐标：x 换 y
+        .attr('transform', d => `translate(${d.y},${d.x})`)
+        .style('cursor', 'pointer')
+        .on('click', d => window.location.href = `/pig/${d.data.id}`);
+
+    // 绘制圆圈
+    nodes.append('circle')
+        .attr('r', 10)
+        // ✅ 修改填充颜色逻辑
+        .attr('fill', function(d) {
+            const sex = d.data.sex;
+            // 根据你的数据库存储值判断 (M/F 或 公/母)
+            if (sex === 'M' || sex === '公') {
+                return '#0d6efd'; // 蓝色代表公
+            } else if (sex === 'F' || sex === '母') {
+                return '#d63384'; // 粉红色代表母
+            } else {
+                return '#6c757d'; // 灰色代表未知
+            }
+        })
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 2)
+        .append('title') // 添加鼠标悬停提示
+        .text(d => `${d.data.name} (${d.data.sex})`);
+
+    // 绘制文字
+    nodes.append('text')
+        .attr('dy', 4)
+        .attr('x', d => d.children ? -15 : 15) // 文字在圆圈的左边还是右边
+        .style('text-anchor', d => d.children ? 'end' : 'start')
+        .style('font-size', '12px')
+        .style('font-weight', 'bold')
+        .text(d => d.data.name);
+
+    // 自动调整视图以适应内容（可选，简单的居中）
+    // 获取根节点位置
+    const rootX = root.y; 
+    // 我们可以通过设置初始 transform 让根节点在视野中间
+    // svg.call(d3.zoom().transform, d3.zoomIdentity.translate(100, height/2 - root.x));
+}
+
+loadPedigreeTree({{ pig.id }});
+</script>
+
+<hr>
+
+<!-- 2. 疫苗图表部分 (改进版) -->
+<h3>疫苗接种时间轴 (按种类)</h3>
+<div style="position: relative; height:400px; width:100%;">
+    <canvas id="vaccineChart"></canvas>
+</div>
+
+<!-- 引入 Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+let vaccineChartInstance = null;
+
+async function loadVaccines(pig_id) {
+    let r = await fetch("/vaccines/" + pig_id);
+    let data = await r.json();
+
+    // 如果没有数据
+    if (!data || data.length === 0) {
+        // 可以在这里清空图表或显示空状态
+        return;
+    }
+
+    // 1. 获取所有唯一的疫苗名称并排序
+    const uniqueVaccines = [...new Set(data.map(item => item.vaccine))].sort();
+    
+    // 2. 准备数据集
+    const datasets = uniqueVaccines.map((vaccineName, index) => {
+        const vaccineRecords = data.filter(d => d.vaccine === vaccineName);
+        
+        const chartData = vaccineRecords.map(record => ({
+            x: record.vacc_date, 
+            y: index + 1 
+        }));
+
+        const colors = [
+            'rgb(255, 99, 132)', 'rgb(54, 162, 235)', 'rgb(255, 205, 86)', 
+            'rgb(75, 192, 192)', 'rgb(153, 102, 255)', 'rgb(255, 159, 64)'
+        ];
+        const color = colors[index % colors.length];
+
+        return {
+            label: vaccineName,
+            data: chartData,
+            borderColor: color,
+            backgroundColor: color,
+            showLine: true, // 开启连线
+            tension: 0.1,
+            pointRadius: 8,
+            pointHoverRadius: 10
+        };
+    });
+
+    const allDates = [...new Set(data.map(d => d.vacc_date))].sort();
+
+    const ctx = document.getElementById("vaccineChart");
+
+    if (vaccineChartInstance) {
+        vaccineChartInstance.destroy();
+    }
+
+    vaccineChartInstance = new Chart(ctx, {
+        type: 'scatter',
+        data: { datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: { display: true, text: '疫苗接种记录' },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const vName = uniqueVaccines[context.parsed.y - 1];
+                            return `${vName}: ${context.parsed.x}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'category',
+                    labels: allDates,
+                    title: { display: true, text: '日期' }
+                },
+                y: {
+                    title: { display: true, text: '疫苗种类' },
+                    min: 0,
+                    ticks: {
+                        stepSize: 1,
+                        callback: function(value) {
+                            return uniqueVaccines[value - 1] || '';
+                        }
+                    },
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                }
+            }
+        }
+    });
+}
+
+loadVaccines({{ pig.id }});
+</script>
+
+<hr>
+
+<!-- 3. 新增疫苗记录部分 -->
+<h3>添加新疫苗</h3>
+<!-- 
+   注意：此处假设你后端有一个 /add_vaccine/<pig_id> 的路由来处理 POST 请求。
+   如果没有，请参考下方的 Python 补充代码。
+-->
+<form action="/add_vaccine/{{ pig.id }}" method="post" id="vaccineForm" style="margin-bottom: 20px;">
+    <div id="vaccinations" style="margin-bottom: 10px;">
+        <!-- 默认显示一行 -->
+        <div class="vacc-row" style="display:flex; gap:10px; margin-bottom:10px;">
+            <input type="text" name="vaccine_name" placeholder="疫苗名称" required style="flex:2; padding:5px;">
+            <input type="date" name="vacc_date" required style="flex:1.5; padding:5px;">
+            <input type="text" name="vacc_notes" placeholder="备注" style="flex:2; padding:5px;">
+            <button type="button" onclick="removeRow(this)" style="background:#ff4d4f; color:white; border:none; padding:5px 10px; cursor:pointer;">删除</button>
+        </div>
+    </div>
+    
+    <button type="button" onclick="addVaccRow()" style="background:#1890ff; color:white; border:none; padding:5px 15px; cursor:pointer; margin-right:10px;">+ 添加一行</button>
+    <button type="submit" style="background:#52c41a; color:white; border:none; padding:5px 15px; cursor:pointer;">保存记录</button>
+</form>
+
+<script>
+function addVaccRow(){
+    const div = document.createElement("div");
+    div.className = "vacc-row";
+    div.style.display = "flex";
+    div.style.gap = "10px";
+    div.style.marginBottom = "10px";
+
+    div.innerHTML = `
+        <input type="text" name="vaccine_name" placeholder="疫苗名称" required style="flex:2; padding:5px;">
+        <input type="date" name="vacc_date" required style="flex:1.5; padding:5px;">
+        <input type="text" name="vacc_notes" placeholder="备注" style="flex:2; padding:5px;">
+        <button type="button" onclick="removeRow(this)" style="background:#ff4d4f; color:white; border:none; padding:5px 10px; cursor:pointer;">删除</button>
+    `;
+    document.getElementById("vaccinations").appendChild(div);
+}
+
+function removeRow(btn){
+    btn.parentElement.remove();
+}
+</script>
+
+<hr>
+
+<!-- 4. 疫苗列表 -->
+<h3>历史记录</h3>
+{% if vaccinations and vaccinations|length > 0 %}
+<table border="1" cellpadding="10" cellspacing="0" style="width:100%; border-collapse: collapse;">
+    <thead style="background-color: #f0f0f0;">
+        <tr>
+            <th>疫苗</th>
+            <th>日期</th>
+            <th>备注</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for v in vaccinations %}
+        <tr>
+            <td>{{ v.vaccine }}</td>
+            <td>{{ v.vacc_date }}</td>
+            <td>{{ v.notes }}</td>
+            <td>
+                <form method="post" action="/delete_vacc/{{ v.id }}" style="display:inline;">
+                    <button type="submit" style="background:none; border:none; color:red; cursor:pointer; text-decoration:underline;">删除</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>暂无接种记录</p>
+{% endif %}
+
+{% endblock %}

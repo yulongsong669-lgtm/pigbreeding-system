@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>批量导入猪只</h2>
+
+<form method="post" enctype="multipart/form-data">
+
+<input type="file" name="file" required>
+
+<button type="submit">上传</button>
+
+</form>
+
+{% endblock %}

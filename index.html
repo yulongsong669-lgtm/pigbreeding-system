@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="text-secondary"><i class="bi bi-list-ul me-2"></i>猪只存栏列表</h2>
+    <div>
+        <a href="/add_pig" class="btn btn-success"><i class="bi bi-plus-lg me-1"></i> 新增登记</a>
+        <a href="/import" class="btn btn-outline-primary"><i class="bi bi-upload me-1"></i> 导入数据</a>
+    </div>
+</div>
+
+<!-- 搜索框区域 -->
+<!-- 高级筛选栏 -->
+<div class="card card-custom p-3 mb-4">
+    <div class="row g-2 align-items-end">
+        <!-- 1. 关键词搜索 -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">耳号</label>
+            <input type="text" id="searchInput" class="form-control" placeholder="输入耳号...">
+        </div>
+
+        <!-- 2. 品种筛选 (下拉框) -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">品种</label>
+            <select id="breedFilter" class="form-select">
+                <option value="">所有品种</option>
+                {% for b in breeds %}
+                <option value="{{ b }}">{{ b }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- 3. 性别筛选 -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">性别</label>
+            <select id="sexFilter" class="form-select">
+                <option value="">所有性别</option>
+                <option value="M">公猪</option>
+                <option value="F">母猪</option>
+            </select>
+        </div>
+
+        <!-- 4. 厂区筛选 -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">厂区</label>
+            <select id="farmFilter" class="form-select">
+                <option value="">所有厂区</option>
+                {% for f in farms %}
+                <option value="{{ f.name }}">{{ f.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <select id="statusFilter" class="form-select" onchange="window.location.href='/?status='+this.value">
+    		<option value="1" {{ request.args.get('status') == '1' or not request.args.get('status') and 'selected'}}>在册 (默认)</option>
+    		<option value="2" {{ request.args.get('status') == '2' and 'selected'}}>淘汰库</option>
+    		<option value="3" {{ request.args.get('status') == '3' and 'selected'}}>使用库</option>
+    		<option value="" {{ not request.args.get('status') and 'selected'}}>全部</option>
+		</select>
+		
+		<div class="col-md-2">
+            <label class="form-label small text-muted">日龄</label>
+            <select id="ageFilter" class="form-select">
+                <option value="">所有日龄</option>
+                <option value="0-30">0-30 天</option>
+                <option value="31-60">31-60 天</option>
+                <option value="61-90">61-90 天</option>
+                <option value="91+">91 天及以上</option>
+            </select>
+        </div>
+        <!-- 5. 重置按钮 -->
+        <div class="col-md-2">
+            <button type="button" class="btn btn-outline-secondary w-100" onclick="resetFilters()">
+                <i class="bi bi-arrow-counterclockwise"></i> 重置筛选
+            </button>
+        </div>
+    </div>
+</div>
+<!-- 数据表格 -->
+<div class="card card-custom">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle" id="pigTable">
+                <thead class="table-light">
+    				<tr>
+       					<th>#</th>
+        				<th>ID</th>
+        				<th>耳号</th>
+        				<th>性别</th>
+        				<th>品种</th>
+        				<th>出生日期</th>
+        				<th>日龄 (天)</th> 
+        				<th>厂区</th>  
+        				<th>近交系数</th>
+        				<th>操作</th>
+    				</tr>
+				</thead>
+                <tbody>
+    				{% for pig in pigs %}
+    				<tr>
+        				<td class="text-muted small">{{ loop.index }}</td>
+        				<td class="text-muted small">{{ pig.id }}</td>
+        				<td class="fw-bold text-primary">{{ pig.ear_tag }}</td>
+        				<td>
+            				{% if pig.sex == 'M' %}
+                				<span class="badge bg-info text-dark">公</span>
+            				{% else %}
+                				<span class="badge bg-danger">母</span>
+            				{% endif %}
+        				</td>
+        				<td>{{ pig.breed }}</td>
+        				<td>{{ pig.birth_date }}</td>
+        
+        				<td>
+            				<span class="badge bg-secondary">{{ pig.birth_date | get_age }}</span>
+        				</td>
+
+        				<!-- 厂区列 (后面内容保持不变) -->
+        				<td>
+            				<span class="farm-id-span">{{ pig.farm_id }}</span>
+        				</td>
+
+        				<td>
+            				{% if pig.inbreeding > 0.05 %}
+                				<span class="text-danger fw-bold">{{ "%.4f"|format(pig.inbreeding) }}</span>
+            				{% else %}
+                				<span class="text-muted">{{ "%.4f"|format(pig.inbreeding or 0) }}</span>
+            				{% endif %}
+        				</td>
+        				<td>
+    <!-- 详情按钮 -->
+    						<a href="/pig/{{ pig.id }}" class="btn btn-sm btn-outline-primary" title="详情">
+        						<i class="bi bi-eye"></i>
+    						</a>
+    
+    <!-- 淘汰按钮 -->
+    						<form action="/eliminate_pig/{{ pig.id }}" method="post" style="display:inline;" onsubmit="return confirm('确定将此猪移入淘汰库吗？');">
+        						<button type="submit" class="btn btn-sm btn-outline-warning" title="淘汰">
+            						<i class="bi bi-x-circle"></i>
+        						</button>
+    						</form>
+    
+    <!-- 使用按钮 -->
+    						<form action="/use_pig/{{ pig.id }}" method="post" style="display:inline;" onsubmit="return confirm('确定将此猪移入使用库吗？');">
+        						<button type="submit" class="btn btn-sm btn-outline-success" title="使用">
+            						<i class="bi bi-check-circle"></i>
+        						</button>
+    						</form>
+
+    <!-- 删除按钮 (保留，红色) -->
+    						<form action="/delete_pig/{{ pig.id }}" method="post" style="display:inline;" onsubmit="return confirm('确定删除?此操作不可恢复！');">
+        						<button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
+            						<i class="bi bi-trash"></i>
+        						</button>
+    						</form>
+						</td>
+    				</tr>
+    				{% else %}
+    				<!-- ✅ 修改：因为有10列了，所以 colspan 也要改成 10 -->
+    				<tr><td colspan="10" class="text-center py-4">暂无数据</td></tr>
+    				{% endfor %}
+				</tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const searchInput = document.getElementById('searchInput');
+    const breedFilter = document.getElementById('breedFilter');
+    const sexFilter = document.getElementById('sexFilter');
+    const farmFilter = document.getElementById('farmFilter');
+    const ageFilter = document.getElementById('ageFilter');
+    const table = document.getElementById('pigTable');
+    const rows = table.getElementsByTagName('tr');
+
+    // 厂区 ID 到 名称的映射
+    const farmMap = {
+        {% for f in farms %}
+        {{ f.id }}: "{{ f.name }}",
+        {% endfor %}
+    };
+
+    // 1. 页面加载时替换厂区 ID 为名称
+    window.onload = function() {
+        const farmSpans = document.querySelectorAll('.farm-id-span');
+        farmSpans.forEach(span => {
+            const id = parseInt(span.innerText);
+            if (farmMap[id]) {
+                span.innerText = farmMap[id];
+            } else {
+                span.innerText = "未知"; // 防止显示为空的 ID
+            }
+        });
+        console.log("页面初始化完成，共有行数:", rows.length - 1);
+        filterTable(); 
+    };
+
+    // 2. 核心筛选函数 (带调试)
+    function filterTable() {
+        const searchText = searchInput.value.toLowerCase().trim();
+        const breedVal = breedFilter.value;
+        const sexVal = sexFilter.value;
+        const farmVal = farmFilter.value;
+        const ageVal = ageFilter.value; // ✅ 新增
+
+        // console.log("筛选条件 -> 耳号:", searchText, "品种:", breedVal, "性别:", sexVal, "厂区:", farmVal, "日龄:", ageVal);
+
+        let matchCount = 0;
+
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            const cells = row.getElementsByTagName('td');
+            
+            if (cells.length < 8) continue;
+
+            // 获取文本 (注意：对应 HTML 中的列索引)
+            // 2:耳号, 3:性别, 4:品种, 6:日龄, 7:厂区
+            const earTag = cells[2].innerText.toLowerCase().trim();
+            const sexText = cells[3].innerText.trim();
+            const breedText = cells[4].innerText.trim();
+            
+            // ✅ 新增：获取日龄列的纯数字文本
+            const ageText = cells[6].innerText.trim();
+            const age = parseInt(ageText);
+
+            const farmText = cells[7].innerText.trim();
+
+            // 判断逻辑
+            const matchSearch = earTag.includes(searchText);
+            const matchBreed = (breedVal === "") || (breedText === breedVal);
+            
+            let matchSex = true;
+            if (sexVal) {
+                const displaySex = sexVal === 'M' ? '公' : '母';
+                matchSex = sexText.includes(displaySex);
+            }
+
+            let matchFarm = true;
+            if (farmVal) {
+                matchFarm = farmText === farmVal;
+            }
+
+            // ✅ 新增：日龄范围判断逻辑
+            let matchAge = true;
+            if (ageVal) {
+                if (isNaN(age)) {
+                    matchAge = false;
+                } else if (ageVal === '0-30') {
+                    matchAge = (age >= 0 && age <= 30);
+                } else if (ageVal === '31-60') {
+                    matchAge = (age >= 31 && age <= 60);
+                } else if (ageVal === '61-90') {
+                    matchAge = (age >= 61 && age <= 90);
+                } else if (ageVal === '91+') {
+                    matchAge = (age >= 91);
+                }
+            }
+
+            // ✅ 修改：最终判断加入 matchAge
+            if (matchSearch && matchBreed && matchSex && matchFarm && matchAge) {
+                row.style.display = "";
+                matchCount++;
+            } else {
+                row.style.display = "none";
+            }
+        }
+        // console.log("筛选后显示的行数:", matchCount);
+    }
+
+    // 3. 监听事件
+    searchInput.addEventListener('keyup', filterTable);
+    breedFilter.addEventListener('change', filterTable);
+    sexFilter.addEventListener('change', filterTable);
+    farmFilter.addEventListener('change', filterTable);
+    ageFilter.addEventListener('change', filterTable);
+
+    // 4. 重置功能
+    function resetFilters() {
+        searchInput.value = "";
+        breedFilter.value = "";
+        sexFilter.value = "";
+        farmFilter.value = "";
+        ageFilter.value = "";
+        filterTable();
+    }
+</script>
+{% endblock %}

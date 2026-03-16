@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>添加猪只</h2>
+
+<form method="post">
+
+<h3>基本信息</h3>
+
+<label>耳号</label><br>
+<input name="ear_tag" required><br><br>
+
+<label>性别</label><br>
+<select name="sex">
+<option value="M">公</option>
+<option value="F">母</option>
+</select><br><br>
+
+<label>品种</label><br>
+<input name="breed"><br><br>
+
+<label>出生日期</label><br>
+<input type="date" name="birth_date"><br><br>
+
+<div style="margin-bottom: 15px;">
+    <label><b>所属厂区:</b></label>
+    <select name="farm_id" id="farmSelect" style="padding: 5px; width: 200px;">
+        {% for f in farms %}
+            <!-- 如果这个厂区 ID 等于当前 Session 里的 ID，就默认选中 -->
+            <option value="{{ f.id }}" {% if session.get('current_farm_id') == f.id %}selected{% endif %}>
+                {{ f.name }}
+            </option>
+        {% endfor %}
+    </select>
+    <small style="color: #666;">(默认跟随当前厂区)</small>
+</div>
+<br>
+
+<!-- 父亲选择框 -->
+<div style="margin-bottom: 15px;">
+    <label><b>父亲 (公猪):</b></label>
+    <select name="father_id" id="fatherSelect" style="padding: 5px; width: 200px;">
+        <option value="">-- 不选 / 未知 --</option>
+        {% for pig in boars %}
+            <option value="{{ pig.id }}">{{ pig.ear_tag }} (ID:{{ pig.id }})</option>
+        {% endfor %}
+    </select>
+</div>
+
+<!-- 母亲选择框 -->
+<div style="margin-bottom: 15px;">
+    <label><b>母亲 (母猪):</b></label>
+    <select name="mother_id" id="motherSelect" style="padding: 5px; width: 200px;">
+        <option value="">-- 不选 / 未知 --</option>
+        {% for pig in sows %}
+            <option value="{{ pig.id }}">{{ pig.ear_tag }} (ID:{{ pig.id }})</option>
+        {% endfor %}
+    </select>
+</div>
+<hr>
+
+<h3>疫苗记录</h3>
+
+<div id="vaccinations">
+
+<div class="vacc-row">
+
+<label>疫苗</label>
+<input name="vaccine_name">
+
+<label>日期</label>
+<input type="date" name="vacc_date">
+
+<label>备注</label>
+<input name="vacc_notes">
+
+<button type="button" onclick="removeRow(this)">删除</button>
+
+</div>
+
+</div>
+
+<br>
+
+<button type="button" onclick="addVaccRow()">添加疫苗</button>
+
+<br><br>
+
+<button type="submit">提交</button>
+
+</form>
+<script>
+    // 1. 监听厂区下拉框的变化
+    document.getElementById('farmSelect').addEventListener('change', function() {
+        const farmId = this.value; // 获取选中的厂区 ID
+
+        // 2. 发送请求给后端
+        fetch(`/get_parents/${farmId}`)
+            .then(response => response.json())
+            .then(data => {
+                // 3. 更新父亲下拉框
+                updateSelectOptions('fatherSelect', data.boars);
+                
+                // 4. 更新母亲下拉框
+                updateSelectOptions('motherSelect', data.sows);
+            })
+            .catch(error => console.error('Error:', error));
+    });
+
+    // 辅助函数：更新下拉框选项
+    function updateSelectOptions(selectId, options) {
+        const select = document.getElementById(selectId);
+        select.innerHTML = '<option value="">-- 不选 / 未知 --</option>'; // 清空并保留默认选项
+        
+        options.forEach(pig => {
+            const option = document.createElement('option');
+            option.value = pig.id;
+            option.textContent = `${pig.ear_tag} (ID:${pig.id})`;
+            select.appendChild(option);
+        });
+    }
+</script>
+
+<script src="/static/js/vacc_row.js"></script>
+
+{% endblock %}
