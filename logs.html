@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>系统访问日志</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f4; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #007bff; color: white; text-transform: uppercase; font-size: 14px; }
+        tr:hover { background-color: #f1f1f1; }
+        .tag-login { color: green; font-weight: bold; }
+        .tag-delete { color: red; font-weight: bold; }
+        .tag-add { color: blue; font-weight: bold; }
+        .tag-update { color: orange; font-weight: bold; }
+        .back-btn { display: inline-block; margin-bottom: 20px; text-decoration: none; color: #333; background: #e2e6ea; padding: 8px 15px; border-radius: 4px; }
+        .back-btn:hover { background: #dbe2ef; }
+            td {
+                word-break: break-all; /* 允许在单词内换行，防止超长ID撑破表格 */
+                white-space: normal;   /* 正常换行 */
+            }
+    
+    /* 或者如果你希望保留空格格式，可以用 pre-wrap */
+            .log-details-cell {
+                white-space: pre-wrap;
+                font-family: monospace;
+                font-size: 0.9em;
+            }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← 返回首页</a>
+        <h2>🔍 
+            {% if current_pig_id %}
+                猪只 ID {{ current_pig_id }} 的操作记录
+            {% else %}
+                系统访问与操作日志 (全部)
+            {% endif %}
+        </h2>
+        
+        <a href="/export_logs?pig_id={{ current_pig_id or '' }}" class="btn btn-success">
+            <i class="bi bi-download"></i> 导出日志
+        </a>
+        {% if not logs %}
+            <p>暂无日志记录。</p>
+        {% else %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>操作人</th>
+                        <th>动作类型</th>
+                        <th>详细信息</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td>{{ log.created_at }}</td>
+                        <td><strong>{{ log.username }}</strong></td>
+                        <td>
+                            {% if log.action == 'login' %}
+                                <span class="tag-login">登录系统</span>
+                            {% elif 'delete' in log.action %}
+                                <span class="tag-delete">{{ log.action }}</span>
+                            {% elif 'add' in log.action %}
+                                <span class="tag-add">{{ log.action }}</span>
+                            {% elif 'reset' in log.action %}
+                                <span class="tag-update">{{ log.action }}</span>
+                            {% else %}
+                                {{ log.action }}
+                            {% endif %}
+                        </td>
+                        <td>{{ log.details }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+</body>
+</html>
