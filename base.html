@@ -33,24 +33,63 @@
     <div id="page-content-wrapper">
 
         <!-- 顶部导航条 -->
-        <nav class="navbar navbar-expand-lg navbar-custom border-bottom">
+        <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm sticky-top">
             <div class="container-fluid">
-                <button class="btn btn-outline-success btn-sm" id="sidebarToggle"><i class="bi bi-list"></i> 菜单</button>
-                {% if session.get('user_id') %}
-                    <!-- 如果已登录：显示 用户名 + 退出按钮 -->
-                    <div style="display: inline-block; margin-left: 20px; padding: 5px 10px; background: #e9ecef; border-radius: 4px;">
-                        <span class="text-muted small me-2">用户: {{ session.get('username') }}</span>
-                        <a href="/logout" class="btn btn-sm btn-outline-danger">退出</a>
-                    </div>
-                {% else %}
-                    <!-- 如果未登录：显示登录按钮 -->
-                    <a href="/login" class="btn btn-sm btn-primary" style="margin-left: 15px;">登录系统</a>
-                {% endif %}
+                <!-- 左侧：侧边栏切换按钮 -->
+                <button class="btn btn-link text-dark p-0 me-2" id="sidebarToggle">
+                    <i class="bi bi-list fs-4"></i>
+                </button>
+
+                <!-- 右侧：用户信息区域 -->
                 <div class="ms-auto d-flex align-items-center">
-                    <span class="me-3 text-muted small">欢迎回来，管理员</span>
-                    <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
-                        <i class="bi bi-person-fill"></i>
-                    </div>
+                    {% if session.get('user_id') %}
+                        <!-- 已登录：显示下拉菜单 -->
+                        <div class="dropdown">
+                            <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle" 
+                               id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                
+                                <!-- 头像 (使用圆形背景图标) -->
+                                <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-2" 
+                                     style="width: 36px; height: 36px;">
+                                    <i class="bi bi-person-fill fs-5"></i>
+                                </div>
+                                
+                                <!-- 用户名与角色 (手机端隐藏文字，只显示头像) -->
+                                <div class="text-start d-none d-md-block">
+                                    <div class="fw-bold text-dark lh-1">
+                                        {{ session.get('username') }}
+                                    </div>
+                                    <small class="text-muted" style="font-size: 0.75rem;">
+                                        {{ session.get('role', 'user') | upper }}
+                                    </small>
+                                </div>
+                            </a>
+
+                            <!-- 下拉菜单内容 -->
+                            <ul class="dropdown-menu dropdown-menu-end shadow border-0" aria-labelledby="userDropdown">
+                                <li>
+                                    <div class="dropdown-item-text">
+                                        <small class="text-muted d-block">当前登录</small>
+                                        <span class="fw-bold text-primary">{{ session.get('username') }}</span>
+                                    </div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+
+
+                                <li>
+                                    <a class="dropdown-item text-danger" href="/logout">
+                                        <i class="bi bi-box-arrow-right me-2"></i>退出登录
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+
+                    {% else %}
+                        <!-- 未登录：显示登录按钮 -->
+                        <a href="/login" class="btn btn-primary btn-sm px-3 rounded-pill shadow-sm">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> 登录系统
+                        </a>
+                    {% endif %}
                 </div>
             </div>
         </nav>
