@@ -4,32 +4,159 @@
 
 <h2>猪只详情</h2>
 
-<div class="pig-info" style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-    <p><b>耳号:</b> {{ pig.ear_tag }}</p>
-    <p><b>性别:</b> {{ pig.sex }}</p>
-    <p><b>品种:</b> {{ pig.breed }}</p>
-    <p><b>出生日期:</b> {{ pig.birth_date }}</p>
-    
-    <!--  日龄显示 -->
-    <p><b>日龄:</b> {{ pig.birth_date | get_age }} 天</p>
-    
-    <!--  所属厂区 -->
-    <p><b>所属厂区:</b> <span class="badge bg-primary">{{ farm_name }}</span></p>
-    
-    <!--  近交系数 -->
-    <p><b>近交系数:</b> 
-        {% if pig.inbreeding > 0.05 %}
-            <span class="text-danger fw-bold">{{ "%.4f"|format(pig.inbreeding) }}</span>
-        {% else %}
-            <span class="text-muted">{{ "%.4f"|format(pig.inbreeding or 0) }}</span>
-        {% endif %}
-    </p>
+<!-- 猪只基本信息 (双列布局) -->
+<!-- 猪只基本信息 (可编辑) -->
+<!-- 添加 form 标签 -->
+<form action="/update_pig_info/{{ pig.id }}" method="post">
+    <div class="pig-info card p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+            <h5 class="card-title m-0">基本信息</h5>
+            <!-- 只有管理员和操作员能看到保存按钮 -->
+            {% if session.get('role') in ['admin', 'operator'] %}
+                <button type="submit" class="btn btn-primary btn-sm">保存修改</button>
+            {% endif %}
+        </div>
+        
+        <div class="row g-3">
+            <!-- 第一列 -->
+            <div class="col-md-6">
+                <!-- 耳号：只读 -->
+                <p><b>耳号:</b> {{ pig.ear_tag }}
+                    {% if pig.is_clone %} 
+                        <a href="/pig/{{ pig.clone_source_id }}" class="text-decoration-none" title="点击查看来源个体">
+                            <span class="badge bg-warning text-dark ms-1">克隆自: {{ clone_source_name or pig.clone_source_id }}</span>
+                        </a>
+                    {% endif %}
+                    {% if surrogate_name %}
+                    <a href="/pig/{{ pig.surrogate_id }}" class="text-decoration-none" title="点击查看代孕母猪详情">
+                        <span class="badge bg-info text-dark ms-1">代孕: {{ surrogate_name }}</span>
+                    </a>
+                {% endif %}
+                </p>
+                
+                <!-- 性别、品种、出生日期：只读 -->
+                <p><b>性别:</b> {{ "公" if pig.sex=='M' else "母" }}</p>
+                <p><b>品种:</b> {{ pig.breed }}</p>
+                <p><b>出生日期:</b> {{ pig.birth_date }} ({{ pig.birth_date|get_age }}天)</p>
+                <p><b>所属厂区:</b> <span class="badge bg-primary">{{ farm_name }}</span></p>
+                
+                <!-- 血型、体重：只读 -->
+                <p><b>血型:</b> {{ pig.blood_type or '-' }}</p>
+                <p><b>当前体重:</b> {{ pig.current_weight }} kg</p>
+                <p><b>理论基因型:</b> {{ pig.theory_genotype or '-' }}</p>
+                
+                <!-- --- 可编辑区域开始 --- -->
+                {% if session.get('role') in ['admin', 'operator'] %}
+                    <div class="mb-2">
+                        <label><b>项目状态:</b></label>
+                        <select name="project_status" class="form-select form-select-sm">
+                            <option value="">-- 未安排 --</option>
+                            <option value="已安排" {% if pig.project_status == '已安排' %}selected{% endif %}>已安排</option>
+                            <option value="未安排" {% if pig.project_status == '未安排' %}selected{% endif %}>未安排</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label><b>安排信息备注:</b></label>
+                        <textarea name="project_notes" class="form-control" rows="1">{{ pig.project_notes or '' }}</textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label><b>基因鉴定结果:</b></label>
+                        <input type="text" name="genotype_result" class="form-control" value="{{ pig.genotype_result or '' }}">
+                    </div>
+                {% else %}
+                    <!-- 普通用户显示文本 -->
+                    <p><b>项目状态:</b> 
+                        {% if pig.project_status == '已安排' %}<span class="badge bg-success">{{ pig.project_status }}</span>
+                        {% elif pig.project_status == '未安排' %}<span class="badge bg-secondary">{{ pig.project_status }}</span>
+                        {% else %} - {% endif %}
+                    </p>
+                    <p><b>安排备注:</b> {{ pig.project_notes or '-' }}</p>
+                    <p><b>基因型鉴定结果:</b> 
+                        {% if pig.genotype_result %}<span class="text-success fw-bold">{{ pig.genotype_result }}</span>{% else %} - {% endif %}
+                    </p>
+                {% endif %}
+                <!-- --- 可编辑区域结束 --- -->
+                
+                <!-- 表型验证方便操作员 -->
+                {% if session.get('role') in ['admin', 'operator'] %}
+                    <div class="mb-2">
+                        <label><b>表型验证:</b></label>
+                        <select name="phenotype_check" class="form-select form-select-sm">
+                            <option value="">-- 未知 --</option>
+                            <!-- 修改这里：Value 和 文字都改为已验证/未验证 -->
+                            <option value="已验证" {% if pig.phenotype_check == '已验证' %}selected{% endif %}>已验证</option>
+                            <option value="未验证" {% if pig.phenotype_check == '未验证' %}selected{% endif %}>未验证</option>
+                        </select>
+                    </div>
+                {% else %}
+                    <p><b>表型验证:</b> 
+                        {% if pig.phenotype_check == '已验证' %}
+                            <span class="badge bg-success">已验证</span>
+                        {% elif pig.phenotype_check == '未验证' %}
+                            <span class="badge bg-warning text-dark">未验证</span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </p>
+                {% endif %}
 
-    {% if pig.notes %}
-    <p><b>备注:</b> {{ pig.notes }}</p>
-    {% endif %}
-</div>
+            </div>
+            <!-- 第二列 -->
+            <div class="col-md-6">
+                <p><b>近交系数:</b> 
+                    {% if pig.inbreeding > 0.05 %}
+                        <span class="text-danger fw-bold">{{ "%.4f"|format(pig.inbreeding) }}</span>
+                    {% else %}
+                        <span class="text-muted">{{ "%.4f"|format(pig.inbreeding) }}</span>
+                    {% endif %}
+                </p>
+                
+                <!-- --- 可编辑区域：健康 --- -->
+                {% if session.get('role') in ['admin', 'operator'] %}
+                    <div class="mb-2">
+                        <label><b>健康状况:</b></label>
+                        <select name="health_status" class="form-select form-select-sm">
+                            <option value="">-- 未知 --</option>
+                            <option value="健康" {% if pig.health_status == '健康' %}selected{% endif %}>健康</option>
+                            <option value="异常" {% if pig.health_status == '异常' %}selected{% endif %}>异常</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label><b>健康异常描述:</b></label>
+                        <textarea name="health_desc" class="form-control" rows="2">{{ pig.health_desc or '' }}</textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label><b>可否自然繁育:</b></label>
+                        <select name="can_breed" class="form-select form-select-sm">
+                            <option value="">-- 未知 --</option>
+                            <option value="是" {% if pig.can_breed == '是' %}selected{% endif %}>是</option>
+                            <option value="否" {% if pig.can_breed == '否' %}selected{% endif %}>否</option>
+                        </select>
+                    </div>
+                {% else %}
+                    <p><b>健康状况:</b> 
+                        {% if pig.health_status == '异常' %}<span class="badge bg-warning text-dark">{{ pig.health_status }}</span>
+                        {% elif pig.health_status == '健康' %}<span class="badge bg-success">{{ pig.health_status }}</span>
+                        {% else %} - {% endif %}
+                    </p>
+                    <p><b>健康异常描述:</b> {{ pig.health_desc or '-' }}</p>
+                    <p><b>代次 (F):</b> {{ pig.pig_generation or '-' }}</p>
+                    <p><b>DPF代次:</b> {{ pig.dpf_generation or '-' }}</p>
+                    <p><b>可否自然繁育:</b> {{ pig.can_breed or '-' }}</p>
+                {% endif %}
+                
+                <!-- 只有操作员以上可以看,如果普通用户也要看，移出else块 -->
+                <p><b>代次 (F):</b> {{ pig.pig_generation or '-' }}</p>
+                <p><b>DPF代次:</b> {{ pig.dpf_generation or '-' }}</p>
+            </div>
+        </div>
+        {% if pig.notes %}
+        <div class="mt-2 text-muted small"><b>备注:</b> {{ pig.notes }}</div>
+        {% endif %}
+    </div>
+</form>
 <hr>
+
 
 <!-- 系谱树部分 -->
 <h3>系谱树 (从左向右)</h3>
@@ -100,7 +227,7 @@ async function loadPedigreeTree(pig_id) {
     // 绘制圆圈
     nodes.append('circle')
         .attr('r', 10)
-        // ✅ 修改填充颜色逻辑
+        //  填充颜色逻辑
         .attr('fill', function(d) {
             const sex = d.data.sex;
             // 根据你的数据库存储值判断 (M/F 或 公/母)
@@ -135,6 +262,72 @@ async function loadPedigreeTree(pig_id) {
 
 loadPedigreeTree({{ pig.id }});
 </script>
+
+<hr>
+
+<h3>体重记录 (生长曲线)</h3>
+<div class="card card-custom mb-4">
+    <div class="card-body">
+        
+        <!-- 1. 自动绘图的画布 -->
+        <div style="position: relative; height:300px; width:100%; margin-bottom: 20px;">
+            <canvas id="weightChart"></canvas>
+        </div>
+
+        <hr>
+
+        <!-- 2. 动态输入表单区域 -->
+        <form action="/add_weight/{{ pig.id }}" method="post" id="weightForm">
+            <label class="form-label fw-bold">添加新记录：</label>
+            <div id="weightInputs" style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                <!-- 默认显示一行 -->
+                <div class="weight-row" style="display:flex; gap:10px; margin-bottom:10px;">
+                    <input type="date" name="weight_date" required style="flex:1; padding:5px;">
+                    <input type="number" step="0.1" name="weight_val" required placeholder="体重" style="flex:1; padding:5px;">
+                    <input type="text" name="weight_notes" placeholder="备注" style="flex:2; padding:5px;">
+                    <!-- 初始行不需要删除按钮，或者可以留一个空的 -->
+                </div>
+            </div>
+            
+            <!-- 按钮组 -->
+            <button type="button" onclick="addWeightRow()" class="btn btn-outline-secondary btn-sm mb-2">
+                <i class="bi bi-plus-circle"></i> 增加一行
+            </button>
+            <button type="submit" class="btn btn-primary btn-sm mb-2">
+                <i class="bi bi-save"></i> 保存所有记录
+            </button>
+        </form>
+
+        <!-- 3. 历史列表表格 -->
+        <table class="table table-sm table-striped table-bordered">
+            <thead class="table-light">
+                <tr>
+                    <th>日期</th>
+                    <th>体重</th>
+                    <th>备注</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for w in weights %}
+                <tr>
+                    <td>{{ w.weigh_date }}</td>
+                    <td class="fw-bold">{{ w.weight }} kg</td>
+                    <td>{{ w.notes }}</td>
+                    <td>
+                        <!-- 使用 form 标签包裹，强制使用 POST 方法 -->
+                        <form action="/delete_weight/{{ w.id }}" method="post" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定删除这条记录？')">删除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-center">暂无记录</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 
 <hr>
 
@@ -318,4 +511,131 @@ function removeRow(btn){
 <p>暂无接种记录</p>
 {% endif %}
 
+<script>
+// --- 1. 动态增加体重记录行 ---
+function addWeightRow() {
+    const div = document.createElement("div");
+    div.className = "weight-row";
+    div.style.display = "flex";
+    div.style.gap = "10px";
+    div.style.marginBottom = "10px";
+
+    // 注意：name 属性必须和后端 request.form.get() 对应
+    div.innerHTML = `
+        <input type="date" name="weight_date" required style="flex:1; padding:5px;">
+        <input type="number" step="0.1" name="weight_val" required placeholder="体重" style="flex:1; padding:5px;">
+        <input type="text" name="weight_notes" placeholder="备注" style="flex:2; padding:5px;">
+        <button type="button" onclick="removeRow(this)" class="btn btn-sm btn-outline-danger">删除</button>
+    `;
+    document.getElementById("weightInputs").appendChild(div);
+}
+
+// --- 2. 删除行 (通用) ---
+function removeRow(btn) {
+    btn.parentElement.remove();
+}
+
+// --- 3. 自动画图逻辑 ---
+// 假设后端传过来的变量名是 weights (在 render_template 里定义的)
+const weightsData = {{ weights | tojson | safe }};
+
+if (weightsData && weightsData.length > 0) {
+    // 按日期排序，防止线条乱画
+    weightsData.sort((a, b) => new Date(a.weigh_date) - new Date(b.weigh_date));
+
+    const labels = weightsData.map(w => w.weigh_date);
+    const dataPoints = weightsData.map(w => w.weight);
+
+    const ctx = document.getElementById('weightChart').getContext('2d');
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '体重变化',
+                data: dataPoints,
+                borderColor: 'rgb(75, 192, 192)', // 线条颜色
+                backgroundColor: 'rgba(75, 192, 192, 0.2)', // 填充颜色
+                tension: 0.1, // 曲线平滑度
+                fill: true,
+                pointRadius: 5,
+                pointHoverRadius: 7
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '体重生长曲线'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return ` 体重: ${context.parsed.y} kg`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: '日期' }
+                },
+                y: {
+                    title: { display: true, text: '体重' },
+                    beginAtZero: false // 不从0开始，以便看清变化
+                }
+            }
+        }
+    });
+}
+</script>
+
+{% if session.get('role') == 'admin' %}
+<div class="card mt-4">
+    <div class="card-header bg-warning text-dark">
+        <i class="bi bi-clock-history"></i> 该猪只的操作历史记录
+    </div>
+    <div class="card-body">
+        {% if pig_logs %}
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>操作人</th>
+                        <th>动作</th>
+                        <th>详情</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in pig_logs %}
+                    <tr>
+                        <td>{{ log.created_at }}</td>
+                        <td>{{ log.username }}</td>
+                        <td>
+                            {% if log.action == 'add_pig' %}
+                                <span class="badge bg-success">新增</span>
+                            {% elif log.action == 'delete_pig' %}
+                                <span class="badge bg-danger">删除</span>
+                            {% elif log.action == 'import_pig' %}
+                                <span class="badge bg-info text-dark">批量导入</span>  
+                            {% elif log.action == 'add_vaccine' %}
+                                <span class="badge bg-info text-dark">疫苗</span>
+                            {% elif log.action == 'status_change' %}
+                                <span class="badge bg-secondary">状态变更</span>
+                            {% else %}
+                                <span class="badge bg-light text-dark">{{ log.action }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ log.details }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="text-muted">暂无操作记录</p>
+        {% endif %}
+{% endif %}
 {% endblock %}
