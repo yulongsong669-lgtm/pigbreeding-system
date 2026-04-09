@@ -1,127 +1,200 @@
 {% extends "base.html" %}
-
 {% block content %}
-
-<h2>添加猪只</h2>
-
-<form method="post">
-
-<h3>基本信息</h3>
-
-<label>耳号</label><br>
-<input name="ear_tag" required><br><br>
-
-<label>性别</label><br>
-<select name="sex">
-<option value="M">公</option>
-<option value="F">母</option>
-</select><br><br>
-
-<label>品种</label><br>
-<input name="breed"><br><br>
-
-<label>出生日期</label><br>
-<input type="date" name="birth_date"><br><br>
-
-<div style="margin-bottom: 15px;">
-    <label><b>所属厂区:</b></label>
-    <select name="farm_id" id="farmSelect" style="padding: 5px; width: 200px;">
-        {% for f in farms %}
-            <!-- 如果这个厂区 ID 等于当前 Session 里的 ID，就默认选中 -->
-            <option value="{{ f.id }}" {% if session.get('current_farm_id') == f.id %}selected{% endif %}>
-                {{ f.name }}
-            </option>
-        {% endfor %}
-    </select>
-    <small style="color: #666;">(默认跟随当前厂区)</small>
-</div>
-<br>
-
-<!-- 父亲选择框 -->
-<div style="margin-bottom: 15px;">
-    <label><b>父亲 (公猪):</b></label>
-    <select name="father_id" id="fatherSelect" style="padding: 5px; width: 200px;">
-        <option value="">-- 不选 / 未知 --</option>
-        {% for pig in boars %}
-            <option value="{{ pig.id }}">{{ pig.ear_tag }} (ID:{{ pig.id }})</option>
-        {% endfor %}
-    </select>
-</div>
-
-<!-- 母亲选择框 -->
-<div style="margin-bottom: 15px;">
-    <label><b>母亲 (母猪):</b></label>
-    <select name="mother_id" id="motherSelect" style="padding: 5px; width: 200px;">
-        <option value="">-- 不选 / 未知 --</option>
-        {% for pig in sows %}
-            <option value="{{ pig.id }}">{{ pig.ear_tag }} (ID:{{ pig.id }})</option>
-        {% endfor %}
-    </select>
-</div>
-<hr>
-
-<h3>疫苗记录</h3>
-
-<div id="vaccinations">
-
-<div class="vacc-row">
-
-<label>疫苗</label>
-<input name="vaccine_name">
-
-<label>日期</label>
-<input type="date" name="vacc_date">
-
-<label>备注</label>
-<input name="vacc_notes">
-
-<button type="button" onclick="removeRow(this)">删除</button>
-
-</div>
-
-</div>
-
-<br>
-
-<button type="button" onclick="addVaccRow()">添加疫苗</button>
-
-<br><br>
-
-<button type="submit">提交</button>
-
-</form>
-<script>
-    // 1. 监听厂区下拉框的变化
-    document.getElementById('farmSelect').addEventListener('change', function() {
-        const farmId = this.value; // 获取选中的厂区 ID
-
-        // 2. 发送请求给后端
-        fetch(`/get_parents/${farmId}`)
-            .then(response => response.json())
-            .then(data => {
-                // 3. 更新父亲下拉框
-                updateSelectOptions('fatherSelect', data.boars);
-                
-                // 4. 更新母亲下拉框
-                updateSelectOptions('motherSelect', data.sows);
-            })
-            .catch(error => console.error('Error:', error));
-    });
-
-    // 辅助函数：更新下拉框选项
-    function updateSelectOptions(selectId, options) {
-        const select = document.getElementById(selectId);
-        select.innerHTML = '<option value="">-- 不选 / 未知 --</option>'; // 清空并保留默认选项
+<div class="container mt-4">
+    <h2>新增猪只登记</h2>
+    <form action="/add_pig" method="post">
         
-        options.forEach(pig => {
-            const option = document.createElement('option');
-            option.value = pig.id;
-            option.textContent = `${pig.ear_tag} (ID:${pig.id})`;
-            select.appendChild(option);
-        });
-    }
+        <!-- 1. 基础信息区 -->
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">基础信息</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label>耳号 *</label>
+                        <input type="text" name="ear_tag" class="form-control" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label>性别 *</label>
+                        <select name="sex" class="form-select">
+                            <option value="M">公</option>
+                            <option value="F">母</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label>品种</label>
+                        <input type="text" name="breed" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label>出生日期</label>
+                        <input type="date" name="birth_date" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label>所属厂区</label>
+                        <select name="farm_id" id="farmSelect" class="form-select">
+                            {% for f in farms %}
+                                <option value="{{ f.id }}">{{ f.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. 克隆信息区 -->
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">克隆设置</div>
+            <div class="card-body">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="isCloneCheck" name="is_clone" value="1" onchange="toggleCloneInput()">
+                    <label class="form-check-label" for="isCloneCheck">这是一头克隆猪</label>
+                </div>
+                <div id="cloneSourceDiv" style="display: none;">
+                    <label>克隆来源 (供体) ID:</label>
+                    <select name="clone_source_id" id="cloneSourceSelect" class="form-select">
+                        <option value="">-- 请选择 --</option>
+                        {% for pig in boars %}
+                            <option value="{{ pig.id }}">{{ pig.ear_tag }} (公)</option>
+                        {% endfor %}
+                        {% for pig in sows %}
+                            <option value="{{ pig.id }}">{{ pig.ear_tag }} (母)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label>代孕母猪 (宿主):</label>
+                    <input type="text" name="surrogate_name" class="form-control" placeholder="请输入代孕母猪耳号 (例如：场外母猪 A01)">
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 父母选择区 (拉通) -->
+        <div class="card mb-3">
+            <div class="card-header bg-secondary text-white">亲本信息 (全厂)</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label>父亲 (公猪):</label>
+                        <select name="father_id" id="fatherSelect" class="form-select">
+                            <option value="">-- 不选 / 未知 --</option>
+                            {% for pig in boars %}
+                                <option value="{{ pig.id }}">{{ pig.ear_tag }} (ID:{{ pig.id }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label>母亲 (母猪):</label>
+                        <select name="mother_id" id="motherSelect" class="form-select">
+                            <option value="">-- 不选 / 未知 --</option>
+                            {% for pig in sows %}
+                                <option value="{{ pig.id }}">{{ pig.ear_tag }} (ID:{{ pig.id }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. 测量信息 -->
+        <div class="card mb-3">
+            <div class="card-header bg-warning text-dark">测量信息</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label>血型</label>
+                        <input type="text" name="blood_type" class="form-control" placeholder="如: A, B, O">
+                    </div>
+                    <div class="col-md-3">
+                        <label>体重</label>
+                        <input type="number" step="0.01" name="weight" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label>称量时间</label>
+                        <input type="date" name="weigh_date" class="form-control">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. 基因与表型 -->
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">基因型</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label>理论基因型</label>
+                        <input type="text" name="theory_genotype" class="form-control">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. 代次与健康 -->
+        <div class="card mb-3">
+            <div class="card-header bg-danger text-white">代次与健康</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label>猪代次 (F)</label>
+                        <input type="number" name="pig_generation" class="form-control" placeholder="克隆首次出生为0">
+                    </div>
+                    <div class="col-md-3">
+                        <label>猪DPF代次</label>
+                        <input type="number" name="dpf_generation" class="form-control" placeholder="DF环境首次出生为0">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 疫苗区 (保持原样) -->
+        <div class="card mb-3">
+            <div class="card-header">疫苗记录</div>
+            <div class="card-body">
+                <div id="vaccinations">
+                    <div class="vacc-row input-group mb-2">
+                        <input type="text" name="vaccine_name" class="form-control" placeholder="疫苗名称" required>
+                        <input type="date" name="vacc_date" class="form-control" required>
+                        <input type="text" name="vacc_notes" class="form-control" placeholder="备注">
+                        <button type="button" class="btn btn-outline-danger" onclick="removeRow(this)">删除</button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="addVaccRow()">+ 添加疫苗</button>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg w-100">保存登记</button>
+    </form>
+</div>
+
+<!-- 引入 Select2 -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+function toggleCloneInput() {
+    var checkBox = document.getElementById("isCloneCheck");
+    var div = document.getElementById("cloneSourceDiv");
+    div.style.display = checkBox.checked ? "block" : "none";
+    if (!checkBox.checked) document.getElementById("cloneSourceSelect").value = "";
+}
+
+ $(document).ready(function() {
+    $('#fatherSelect').select2({ placeholder: "输入耳号搜索...", width: '100%' });
+    $('#motherSelect').select2({ placeholder: "输入耳号搜索...", width: '100%' });
+    $('#cloneSourceSelect').select2({ placeholder: "输入耳号搜索...", width: '100%' });
+});
+
+function addVaccRow(){
+    const div = document.createElement("div");
+    div.className = "vacc-row input-group mb-2";
+    div.innerHTML = `
+        <input type="text" name="vaccine_name" class="form-control" placeholder="疫苗名称" required>
+        <input type="date" name="vacc_date" class="form-control" required>
+        <input type="text" name="vacc_notes" class="form-control" placeholder="备注">
+        <button type="button" class="btn btn-outline-danger" onclick="removeRow(this)">删除</button>
+    `;
+    document.getElementById("vaccinations").appendChild(div);
+}
+function removeRow(btn){ btn.parentElement.remove(); }
 </script>
-
-<script src="/static/js/vacc_row.js"></script>
-
 {% endblock %}
