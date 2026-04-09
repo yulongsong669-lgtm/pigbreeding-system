@@ -1,26 +1,201 @@
 {% extends "base.html" %}
 
 {% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    /* 1. 表格横向拖拽滚动样式 */
+    .table-scroll-container {
+        overflow-x: hidden; /* 隐藏滚动条 */
+        white-space: nowrap; /* 强制内容不换行 */
+        cursor: grab; /* 鼠标变成抓手 */
+        user-select: none; /* 防止拖拽时选中文字 */
+        position: relative;
+        background-color: #fff;
+    }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="text-secondary"><i class="bi bi-list-ul me-2"></i>猪只存栏列表</h2>
-    <div>
-        <a href="/add_pig" class="btn btn-success"><i class="bi bi-plus-lg me-1"></i> 新增登记</a>
-        <a href="/import" class="btn btn-outline-primary"><i class="bi bi-upload me-1"></i> 导入数据</a>
+    .table-scroll-container.active {
+        cursor: grabbing;
+    }
+
+    /* 强制所有单元格不换行 */
+    .table-scroll-container td, 
+    .table-scroll-container th {
+        white-space: nowrap;
+    }
+
+    /* --- 2. 关键修复：强制合并边框，消除缝隙 --- */
+    .table {
+        border-collapse: collapse !important; 
+    }
+    
+    /* --- 3. 表头（横向冻结） --- */
+    .table thead {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: #f8f9fa !important;
+    }
+
+    .table thead th {
+        background-color: #f8f9fa !important;
+        border-bottom: 1px solid #dee2e6; /* 边框设为 1px，防止太粗 */
+        padding: 0.75rem; /* 保持内边距一致 */
+    }
+    
+    /* --- 4. 左侧列（纵向冻结） --- */
+
+    /* 通用左侧列样式 */
+    .table th:nth-child(1), .table td:nth-child(1),
+    .table th:nth-child(2), .table td:nth-child(2),
+    .table th:nth-child(3), .table td:nth-child(3),
+    .table th:nth-child(4), .table td:nth-child(4) {
+        position: sticky;
+        background-color: #fff !important; /* 内容列白色背景 */
+        border-right: 1px solid #dee2e6; /* 右侧分割线 1px */
+    }
+
+    /* 第1列：复选框 */
+    .table th:nth-child(1), .table td:nth-child(1) {
+        left: 0;
+        z-index: 5;
+        width: 45px; 
+        min-width: 45px;
+    }
+    /* 第1列表头：交叉点 */
+    .table th:nth-child(1) {
+        top: 0;
+        z-index: 20;
+        background-color: #f8f9fa !important; /* 交叉点灰色背景 */
+    }
+
+    /* 第2列：# */
+    .table th:nth-child(2), .table td:nth-child(2) {
+        left: 45px;
+        z-index: 5;
+        width: 50px; 
+        min-width: 50px;
+    }
+    .table th:nth-child(2) {
+        top: 0;
+        z-index: 20;
+        background-color: #f8f9fa !important;
+    }
+
+    /* 第3列：ID */
+    .table th:nth-child(3), .table td:nth-child(3) {
+        left: 95px;
+        z-index: 5;
+        width: 70px; 
+        min-width: 70px;
+    }
+    .table th:nth-child(3) {
+        top: 0;
+        z-index: 20;
+        background-color: #f8f9fa !important;
+    }
+
+    /* 第4列：耳号 */
+    .table th:nth-child(4), .table td:nth-child(4) {
+        left: 165px;
+        z-index: 5;
+        border-right: 1px solid #dee2e6;
+    }
+    .table th:nth-child(4) {
+        top: 0;
+        z-index: 20;
+        background-color: #f8f9fa !important;
+    }
+
+    /* 鼠标悬停效果 */
+    .table tbody tr:hover td {
+        background-color: rgba(0,0,0,.025) !important; 
+    }
+    .table tbody tr:hover th {
+        background-color: #e2e6ea !important;
+    }
+    
+    /* 确保普通单元格也有左边框，防止左侧列和内容之间有缝 */
+    .table td, .table th {
+        border-left: 1px solid #dee2e6;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    /* 最小宽度 */
+    #pigTable {
+        min-width: 1000px; 
+    }
+</style>
+
+<!-- 优化后的头部区域：增加背景卡片、阴影和视觉分隔 -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center py-3 gap-3">
+        
+        <!-- 左侧：标题与核心操作 -->
+        <div class="d-flex align-items-center gap-3">
+            <h2 class="h4 mb-0 fw-bold text-primary">
+                <i class="bi bi-list-ul me-2"></i>猪只存栏列表
+            </h2>
+            
+            <!-- 装饰性分隔线 (桌面端显示) -->
+            <div class="vr d-none d-md-block"></div>
+
+            <div class="d-flex gap-2">
+                <a href="/add_pig" class="btn btn-success btn-sm shadow-sm">
+                    <i class="bi bi-plus-lg me-1"></i> 新增登记
+                </a>
+                <a href="/import" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-upload me-1"></i> 导入数据
+                </a>
+            </div>
+        </div>
+
+        <!-- 右侧：导出与管理 -->
+        <div class="d-flex align-items-center gap-2">
+            
+            <!-- 导出按钮组 -->
+            <div class="btn-group" role="group">
+                <button onclick="exportSelectedPigs()" class="btn btn-outline-success btn-sm" title="导出勾选的猪">
+                    <i class="bi bi-check2-square"></i> <span class="d-none d-lg-inline">导出选中</span>
+                </button>
+                <a href="/export_pigs?status={{ request.args.get('status', '1') }}" class="btn btn-outline-info btn-sm" title="导出当前列表">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> <span class="d-none d-lg-inline">当前列表</span>
+                </a>
+                <a href="/export_pigs?all=1" class="btn btn-outline-secondary btn-sm" title="导出全部数据">
+                    <i class="bi bi-database"></i> <span class="d-none d-lg-inline">全部数据</span>
+                </a>
+            </div>
+
+            <!-- 装饰性分隔线 (桌面端显示) -->
+            <div class="vr d-none d-md-block"></div>
+
+            <!-- 管理员专属入口 -->
+            {% if session.get('role') == 'admin' %}
+            <div class="d-flex gap-2">
+                <a href="/logs" class="btn btn-dark btn-sm" title="查看系统日志">
+                    <i class="bi bi-journal-text"></i> <span class="d-none d-lg-inline">日志</span>
+                </a>
+                <a href="/manage_users" class="btn btn-dark btn-sm" title="用户管理">
+                    <i class="bi bi-people"></i> <span class="d-none d-lg-inline">用户</span>
+                </a>
+            </div>
+            {% endif %}
+            
+        </div>
     </div>
 </div>
+    
 
-<!-- 搜索框区域 -->
 <!-- 高级筛选栏 -->
 <div class="card card-custom p-3 mb-4">
     <div class="row g-2 align-items-end">
-        <!-- 1. 关键词搜索 -->
+        
+        <!-- 1. 耳号搜索 -->
         <div class="col-md-2">
             <label class="form-label small text-muted">耳号</label>
             <input type="text" id="searchInput" class="form-control" placeholder="输入耳号...">
         </div>
 
-        <!-- 2. 品种筛选 (下拉框) -->
+        <!-- 2. 品种筛选 -->
         <div class="col-md-2">
             <label class="form-label small text-muted">品种</label>
             <select id="breedFilter" class="form-select">
@@ -52,14 +227,36 @@
             </select>
         </div>
 
-        <select id="statusFilter" class="form-select" onchange="window.location.href='/?status='+this.value">
-    		<option value="1" {{ request.args.get('status') == '1' or not request.args.get('status') and 'selected'}}>在册 (默认)</option>
-    		<option value="2" {{ request.args.get('status') == '2' and 'selected'}}>淘汰库</option>
-    		<option value="3" {{ request.args.get('status') == '3' and 'selected'}}>使用库</option>
-    		<option value="" {{ not request.args.get('status') and 'selected'}}>全部</option>
-		</select>
-		
-		<div class="col-md-2">
+        <!-- 5. 状态筛选 (在册/淘汰/使用) -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">猪只状态</label>
+            <select id="statusFilter" class="form-select" onchange="window.location.href='/?status='+this.value">
+                <option value="1" {{ request.args.get('status') == '1' or not request.args.get('status') and 'selected'}}>在册 (默认)</option>
+                <option value="2" {{ request.args.get('status') == '2' and 'selected'}}>淘汰库</option>
+                <option value="3" {{ request.args.get('status') == '3' and 'selected'}}>使用库</option>
+                <option value="" {{ not request.args.get('status') and 'selected'}}>全部</option>
+            </select>
+        </div>
+                <!-- 修改为：理论基因型 (带搜索) -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">理论基因型</label>
+            <!-- 使用 select2 类 -->
+            <select id="theoryGenotypeFilter" class="form-select select2-single">
+                <option value="">全部</option>
+                <!-- 选项将由 JS 动态生成 -->
+            </select>
+        </div>
+
+        <!-- 修改为：基因鉴定结果 (带搜索) -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">基因鉴定结果</label>
+            <select id="genotypeFilter" class="form-select select2-single">
+                <option value="">全部</option>
+                <!-- 选项将由 JS 动态生成 -->
+            </select>
+        </div>
+        <!-- 6. 日龄筛选 -->
+        <div class="col-md-2">
             <label class="form-label small text-muted">日龄</label>
             <select id="ageFilter" class="form-select">
                 <option value="">所有日龄</option>
@@ -69,7 +266,75 @@
                 <option value="91+">91 天及以上</option>
             </select>
         </div>
-        <!-- 5. 重置按钮 -->
+
+        <!-- 【新增】7. 项目状态筛选 -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">项目状态</label>
+            <select id="projectFilter" class="form-select">
+                <option value="">全部</option>
+                <option value="已安排">已安排</option>
+                <option value="未安排">未安排</option>
+            </select>
+        </div>
+
+        <!-- 【新增】8. 健康状况筛选 -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">健康状况</label>
+            <select id="healthFilter" class="form-select">
+                <option value="">全部</option>
+                <option value="健康">健康</option>
+                <option value="异常">异常</option>
+            </select>
+        </div>
+
+
+                <!-- 【新增】7. 血型筛选 -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">血型</label>
+            <select id="bloodTypeFilter" class="form-select">
+                <option value="">全部血型</option>
+                <option value="AA">AA</option>
+                <option value="AO">AO</option>
+                <option value="OO">OO</option>
+            </select>
+        </div>
+
+        <!-- 【新增】8. 体重范围筛选 -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">体重范围</label>
+            <select id="weightRangeFilter" class="form-select">
+                <option value="">全部</option>
+                <option value="0-10">0 - 10 kg</option>
+                <option value="10-15">10 - 15 kg</option>
+                <option value="15-20">15 - 20 kg</option>
+                <option value="20+">20 kg 以上</option>
+            </select>
+        </div>
+
+        <!-- 【新增】9. 代次 (F) 筛选 -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">代次 (F)</label>
+            <select id="genFilter" class="form-select">
+                <option value="">全部</option>
+                <option value="0">0 (基础群)</option>
+                <option value="1">F1</option>
+                <option value="2">F2</option>
+                <option value="3">F3+</option>
+            </select>
+        </div>
+
+        <!-- 【新增】10. DPF代次筛选 -->
+        <div class="col-md-2">
+            <label class="form-label small text-muted">DPF代次</label>
+            <select id="dpfFilter" class="form-select">
+                <option value="">全部</option>
+                <option value="0">0 (DPF出生)</option>
+                <option value="1">1</option>
+                <option value="2">2+</option>
+            </select>
+        </div>
+
+        <!-- 9. 重置按钮 -->
         <div class="col-md-2">
             <button type="button" class="btn btn-outline-secondary w-100" onclick="resetFilters()">
                 <i class="bi bi-arrow-counterclockwise"></i> 重置筛选
@@ -80,87 +345,200 @@
 <!-- 数据表格 -->
 <div class="card card-custom">
     <div class="card-body">
-        <div class="table-responsive">
+        <!-- 修改点：div 类名改为 table-scroll-container，并增加 id -->
+        <div class="table-scroll-container" id="tableScrollArea">
             <table class="table table-hover align-middle" id="pigTable">
                 <thead class="table-light">
-    				<tr>
-       					<th>#</th>
-        				<th>ID</th>
-        				<th>耳号</th>
-        				<th>性别</th>
-        				<th>品种</th>
-        				<th>出生日期</th>
-        				<th>日龄 (天)</th> 
-        				<th>厂区</th>  
-        				<th>近交系数</th>
-        				<th>操作</th>
-    				</tr>
-				</thead>
+                    <tr>
+                        <!-- 冻结列 1 -->
+                        <th style="width: 40px; text-align: center;">
+                            <input type="checkbox" id="selectAllPigs" onclick="toggleSelectAll()">
+                        </th>
+                        <!-- 冻结列 2 -->
+                        <th>#</th>
+                        <!-- 冻结列 3 -->
+                        <th>ID</th>
+                        <!-- 冻结列 4 (最后一列冻结列) -->
+                        <th>耳号</th>
+                        
+                        <th>性别</th>
+                        <th>品种</th>
+                        <th>理论基因型</th>
+                        <th>基因鉴定结果</th>
+                        <th>出生日期</th>
+                        <th>日龄 (天)</th> 
+                        <th>厂区</th>  
+                        <th>近交系数</th>
+                        <th>血型</th>
+                        <th>体重</th>
+                        <th>称量时间</th>
+                        <th>项目状态</th>
+                        <th>安排信息备注</th>
+                        <th>表型验证</th>
+                        <th>健康状况</th>
+                        <th>代次 (F)</th>
+                        <th>DPF代次</th>
+                        <th>可否自然繁育</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
                 <tbody>
-    				{% for pig in pigs %}
-    				<tr>
-        				<td class="text-muted small">{{ loop.index }}</td>
-        				<td class="text-muted small">{{ pig.id }}</td>
-        				<td class="fw-bold text-primary">{{ pig.ear_tag }}</td>
-        				<td>
-            				{% if pig.sex == 'M' %}
-                				<span class="badge bg-info text-dark">公</span>
-            				{% else %}
-                				<span class="badge bg-danger">母</span>
-            				{% endif %}
-        				</td>
-        				<td>{{ pig.breed }}</td>
-        				<td>{{ pig.birth_date }}</td>
-        
-        				<td>
-            				<span class="badge bg-secondary">{{ pig.birth_date | get_age }}</span>
-        				</td>
+                    {% for pig in pigs %}
+                    <tr>
+                        <!-- 1. 复选框 (冻结) -->
+                        <td style="text-align: center;">
+                            <input type="checkbox" class="pig-checkbox" value="{{ pig.id }}">
+                        </td>
+                        
+                        <!-- 2. # (冻结) -->
+                        <td class="text-muted small">{{ loop.index }}</td>
+                        
+                        <!-- 3. ID (冻结) -->
+                        <td class="text-muted small">{{ pig.id }}</td>
+                        
+                        <!-- 4. 耳号 (冻结 + 克隆标记) -->
+                        <td class="fw-bold text-primary">
+                            {{ pig.ear_tag }}
+                            {% if pig.is_clone == 1 %}
+                                <span class="badge bg-warning text-dark ms-1" title="克隆自 ID: {{ pig.clone_source_id }}">克隆</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- 5. 性别 -->
+                        <td>
+                            {% if pig.sex == 'M' %}
+                                <span class="badge bg-info text-dark">公</span>
+                            {% else %}
+                                <span class="badge bg-danger">母</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- 6. 品种 -->
+                        <td>{{ pig.breed }}</td>
+                        
+                        <!-- 7. 理论基因型 -->
+                        <td>{{ pig.theory_genotype or '-' }}</td>
+                        
+                        <!-- 8. 基因鉴定结果 -->
+                        <td>
+                            {% if pig.genotype_result %}
+                                <span class="fw-bold text-success">{{ pig.genotype_result }}</span>
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- 9. 出生日期 -->
+                        <td>{{ pig.birth_date }}</td>
+                        
+                        <!-- 10. 日龄 -->
+                        <td>
+                            <span class="badge bg-secondary">{{ pig.birth_date | get_age }}</span>
+                        </td>
 
-        				<!-- 厂区列 (后面内容保持不变) -->
-        				<td>
-            				<span class="farm-id-span">{{ pig.farm_id }}</span>
-        				</td>
+                        <!-- 11. 厂区 -->
+                        <td>
+                            <span class="farm-id-span">{{ pig.farm_id }}</span>
+                        </td>
 
-        				<td>
-            				{% if pig.inbreeding > 0.05 %}
-                				<span class="text-danger fw-bold">{{ "%.4f"|format(pig.inbreeding) }}</span>
-            				{% else %}
-                				<span class="text-muted">{{ "%.4f"|format(pig.inbreeding or 0) }}</span>
-            				{% endif %}
-        				</td>
-        				<td>
-    <!-- 详情按钮 -->
-    						<a href="/pig/{{ pig.id }}" class="btn btn-sm btn-outline-primary" title="详情">
-        						<i class="bi bi-eye"></i>
-    						</a>
-    
-    <!-- 淘汰按钮 -->
-    						<form action="/eliminate_pig/{{ pig.id }}" method="post" style="display:inline;" onsubmit="return confirm('确定将此猪移入淘汰库吗？');">
-        						<button type="submit" class="btn btn-sm btn-outline-warning" title="淘汰">
-            						<i class="bi bi-x-circle"></i>
-        						</button>
-    						</form>
-    
-    <!-- 使用按钮 -->
-    						<form action="/use_pig/{{ pig.id }}" method="post" style="display:inline;" onsubmit="return confirm('确定将此猪移入使用库吗？');">
-        						<button type="submit" class="btn btn-sm btn-outline-success" title="使用">
-            						<i class="bi bi-check-circle"></i>
-        						</button>
-    						</form>
-
-    <!-- 删除按钮 (保留，红色) -->
-    						<form action="/delete_pig/{{ pig.id }}" method="post" style="display:inline;" onsubmit="return confirm('确定删除?此操作不可恢复！');">
-        						<button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
-            						<i class="bi bi-trash"></i>
-        						</button>
-    						</form>
-						</td>
-    				</tr>
-    				{% else %}
-    				<!-- ✅ 修改：因为有10列了，所以 colspan 也要改成 10 -->
-    				<tr><td colspan="10" class="text-center py-4">暂无数据</td></tr>
-    				{% endfor %}
-				</tbody>
+                        <!-- 12. 近交系数 -->
+                        <td>
+                            {% if pig.calculated_F > 0.05 %}
+                                <span class="text-danger fw-bold">{{ "%.4f"|format(pig.calculated_F) }}</span>
+                            {% else %}
+                                <span class="text-muted">{{ "%.4f"|format(pig.calculated_F) }}</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- 13. 血型 -->
+                        <td>{{ pig.blood_type or '-' }}</td>
+                        
+                        <!-- 14. 体重 -->
+                        <td>{{ pig.current_weight }}</td>
+                        
+                        <!-- 15. 称量时间 -->
+                        <td>{{ pig.weigh_date or '-' }}</td>
+                        
+                        <!-- 16. 项目状态 -->
+                        <td>
+                            {% if pig.project_status == '已安排' %}
+                                <span class="badge bg-success">{{ pig.project_status }}</span>
+                            {% elif pig.project_status == '未安排' %}
+                                <span class="badge bg-secondary">{{ pig.project_status }}</span>
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- 17. 安排信息备注 (长文本截断) -->
+                        <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ pig.project_notes or '' }}">
+                            {{ pig.project_notes or '-' }}
+                        </td>
+                        
+                        <!-- 表型验证 -->
+                        <td>
+                            {% if pig.phenotype_check == '已验证' %}
+                                <span class="badge bg-success">已验证</span>
+                            {% elif pig.phenotype_check == '未验证' %}
+                                <span class="badge bg-warning text-dark">未验证</span>
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- 19. 健康状况 -->
+                        <td>
+                            {% if pig.health_status == '异常' %}
+                                <span class="badge bg-warning text-dark">{{ pig.health_status }}</span>
+                            {% elif pig.health_status == '健康' %}
+                                <span class="badge bg-success">{{ pig.health_status }}</span>
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+                        
+                        
+                        <!-- 20. 代次 -->
+                        <td>{{ pig.pig_generation or '-' }}</td>
+                        
+                        <!-- 21. DPF代次 -->
+                        <td>{{ pig.dpf_generation or '-' }}</td>
+                        
+                        <!-- 22. 可否自然繁育 -->
+                        <td>{{ pig.can_breed or '-' }}</td>
+                        
+                        <!-- 23. 操作 -->
+                        <td>
+                            <a href="/pig/{{ pig.id }}" class="btn btn-sm btn-outline-primary" title="详情">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% if role != 'viewer' %}
+                                <form action="/eliminate_pig/{{ pig.id }}" method="post" style="display:inline;" onsubmit="return confirm('确定将此猪移入淘汰库吗？');">
+                                    <button type="submit" class="btn btn-sm btn-outline-warning" title="淘汰">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                </form>
+                                <form action="/use_pig/{{ pig.id }}" method="post" style="display:inline;" onsubmit="return confirm('确定将此猪移入使用库吗？');">
+                                    <button type="submit" class="btn btn-sm btn-outline-success" title="使用">
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>
+                                </form>
+                                <form action="/delete_pig/{{ pig.id }}" method="post" style="display:inline;" onsubmit="return confirm('确定删除?此操作不可恢复！');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            {% endif %}
+                            {% if role == 'admin' %}
+                                <a href="/logs?pig_id={{ pig.id }}" class="btn btn-sm btn-dark">日志</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <!-- 注意：这里的 colspan 必须改成 24，因为有 24 列了 -->
+                    <tr><td colspan="23" class="text-center py-4">暂无数据</td></tr>
+                    {% endfor %}
+                </tbody>
             </table>
         </div>
     </div>
@@ -169,7 +547,47 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
+    // ============================
+    // 功能 1：表格横向拖拽滚动
+    // ============================
+    const slider = document.getElementById('tableScrollArea');
+    let isDown = false;
+    let startX;
+    let scrollLeft;
+
+    if (slider) {
+        slider.addEventListener('mousedown', (e) => {
+            isDown = true;
+            slider.classList.add('active');
+            startX = e.pageX - slider.offsetLeft;
+            scrollLeft = slider.scrollLeft;
+        });
+
+        slider.addEventListener('mouseleave', () => {
+            isDown = false;
+            slider.classList.remove('active');
+        });
+
+        slider.addEventListener('mouseup', () => {
+            isDown = false;
+            slider.classList.remove('active');
+        });
+
+        slider.addEventListener('mousemove', (e) => {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - slider.offsetLeft;
+            const walk = (x - startX) * 2; // 滚动速度
+            slider.scrollLeft = scrollLeft - walk;
+        });
+    }
+
+    // ============================
+    // 功能 2：筛选与数据初始化
+    // ============================
     const searchInput = document.getElementById('searchInput');
     const breedFilter = document.getElementById('breedFilter');
     const sexFilter = document.getElementById('sexFilter');
@@ -177,6 +595,12 @@
     const ageFilter = document.getElementById('ageFilter');
     const table = document.getElementById('pigTable');
     const rows = table.getElementsByTagName('tr');
+    const projectFilter = document.getElementById("projectFilter");
+    const healthFilter = document.getElementById("healthFilter");
+    const bloodTypeFilter = document.getElementById("bloodTypeFilter");
+    const weightRangeFilter = document.getElementById("weightRangeFilter");
+    const genFilter = document.getElementById("genFilter");
+    const dpfFilter = document.getElementById("dpfFilter");
 
     // 厂区 ID 到 名称的映射
     const farmMap = {
@@ -185,7 +609,7 @@
         {% endfor %}
     };
 
-    // 1. 页面加载时替换厂区 ID 为名称
+    // 1. 页面加载时替换厂区 ID 为名称，并初始化筛选
     window.onload = function() {
         const farmSpans = document.querySelectorAll('.farm-id-span');
         farmSpans.forEach(span => {
@@ -193,22 +617,79 @@
             if (farmMap[id]) {
                 span.innerText = farmMap[id];
             } else {
-                span.innerText = "未知"; // 防止显示为空的 ID
+                span.innerText = "未知"; 
             }
         });
         console.log("页面初始化完成，共有行数:", rows.length - 1);
         filterTable(); 
     };
 
-    // 2. 核心筛选函数 (带调试)
+
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. 初始化横向拖动 (保持不变) ...
+    // 2. 初始化筛选功能 ...
+
+    // ============================
+    // 【核心】动态生成基因型筛选选项
+    // ============================
+    const theoryGenotypes = new Set();
+    const genotypeResults = new Set();
+
+    // 遍历表格每一行，收集数据
+    const table = document.getElementById('pigTable');
+    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+    
+    for (let i = 0; i < rows.length; i++) {
+        const cells = rows[i].getElementsByTagName('td');
+        if (cells.length < 7) continue; // 防止空行报错
+
+        // 索引 6: 理论基因型, 索引 7: 鉴定结果
+        const tVal = cells[6].innerText.trim();
+        const gVal = cells[7].innerText.trim();
+
+        if (tVal) theoryGenotypes.add(tVal);
+        if (gVal) genotypeResults.add(gVal);
+    }
+
+    // 3. 填充“理论基因型”下拉框
+    const tFilter = $('#theoryGenotypeFilter');
+    // 先清空旧选项（保留第一个“全部”）
+    tFilter.find('option:not(:first)').remove();
+    
+    // 动态添加新选项
+    theoryGenotypes.forEach(val => {
+        const newOption = new Option(val, val, false, false);
+        tFilter.append(newOption);
+    });
+
+    // 4. 填充“基因鉴定结果”下拉框
+    const gFilter = $('#genotypeFilter');
+    gFilter.find('option:not(:first)').remove();
+    
+    genotypeResults.forEach(val => {
+        const newOption = new Option(val, val, false, false);
+        gFilter.append(newOption);
+    });
+
+    // 5. 初始化 Select2 插件
+    $('.select2-single').select2({
+        placeholder: "输入或选择...",
+        allowClear: true,
+        width: '100%'
+    });
+
+    // 6. 执行一次初始筛选
+    filterTable();
+});
+
+    // 2. 核心筛选函数 (已修正列索引)
     function filterTable() {
         const searchText = searchInput.value.toLowerCase().trim();
         const breedVal = breedFilter.value;
         const sexVal = sexFilter.value;
         const farmVal = farmFilter.value;
-        const ageVal = ageFilter.value; // ✅ 新增
-
-        // console.log("筛选条件 -> 耳号:", searchText, "品种:", breedVal, "性别:", sexVal, "厂区:", farmVal, "日龄:", ageVal);
+        const ageVal = ageFilter.value; 
 
         let matchCount = 0;
 
@@ -218,17 +699,17 @@
             
             if (cells.length < 8) continue;
 
-            // 获取文本 (注意：对应 HTML 中的列索引)
-            // 2:耳号, 3:性别, 4:品种, 6:日龄, 7:厂区
-            const earTag = cells[2].innerText.toLowerCase().trim();
-            const sexText = cells[3].innerText.trim();
-            const breedText = cells[4].innerText.trim();
+            // 修正后的索引：
+            // 0:Checkbox, 1:#, 2:ID, 3:耳号, 4:性别, 5:品种, 6:出生日期, 7:日龄, 8:厂区, 9:近交系数, 10:操作
+            const earTag = cells[3].innerText.toLowerCase().trim();
+            const sexText = cells[4].innerText.trim();
+            const breedText = cells[5].innerText.trim();
             
-            // ✅ 新增：获取日龄列的纯数字文本
-            const ageText = cells[6].innerText.trim();
+            // 获取日龄列的纯数字文本
+            const ageText = cells[9].innerText.trim();
             const age = parseInt(ageText);
 
-            const farmText = cells[7].innerText.trim();
+            const farmText = cells[10].innerText.trim();
 
             // 判断逻辑
             const matchSearch = earTag.includes(searchText);
@@ -245,7 +726,7 @@
                 matchFarm = farmText === farmVal;
             }
 
-            // ✅ 新增：日龄范围判断逻辑
+            // 新增：日龄范围判断逻辑
             let matchAge = true;
             if (ageVal) {
                 if (isNaN(age)) {
@@ -260,16 +741,83 @@
                     matchAge = (age >= 91);
                 }
             }
+            let matchProject = true;
+            const projectVal = projectFilter.value;
+            if (projectVal) {
+                const projectText = cells[15].innerText.trim(); // 注意：根据你的表格，项目状态在第16列（索引15）
+                matchProject = (projectText === projectVal);
+            }
 
-            // ✅ 修改：最终判断加入 matchAge
-            if (matchSearch && matchBreed && matchSex && matchFarm && matchAge) {
+            // --- 【新增】健康状况判断逻辑 ---
+            let matchHealth = true;
+            const healthVal = healthFilter.value;
+            if (healthVal) {
+                const healthText = cells[17].innerText.trim(); // 注意：健康状况在第18列（索引17）
+                matchHealth = (healthText === healthVal);
+            }
+
+            let matchBlood = true;
+            const bloodVal = bloodTypeFilter.value;
+            if (bloodVal) {
+                const bloodText = cells[12].innerText.trim(); // 血型在第13列 (索引12)
+                matchBlood = (bloodText === bloodVal);
+            }
+
+            // --- 【新增】体重范围判断 ---
+            let matchWeight = true;
+            const weightVal = weightRangeFilter.value;
+            if (weightVal) {
+                const weightText = cells[13].innerText.trim(); // 体重在第14列 (索引13)
+                const weight = parseFloat(weightText);
+                
+                if (isNaN(weight)) {
+                    matchWeight = false;
+                } else if (weightVal === '0-10') {
+                    matchWeight = (weight >= 0 && weight < 10);
+                } else if (weightVal === '10-15') {
+                    matchWeight = (weight >= 10 && weight < 15);
+                } else if (weightVal === '15-20') {
+                    matchWeight = (weight >= 15 && weight < 20);
+                } else if (weightVal === '20+') {
+                    matchWeight = (weight >= 20);
+                }
+            }
+
+            // --- 【新增】代次 (F) 判断 ---
+            let matchGen = true;
+            const genVal = genFilter.value;
+            if (genVal) {
+                const genText = cells[20].innerText.trim(); // 
+                if (genVal === '3+') {
+                    const genNum = parseInt(genText);
+                    matchGen = (genNum >= 3);
+                } else {
+                    matchGen = (genText === genVal);
+                }
+            }
+
+            // --- 【新增】DPF代次判断 ---
+            let matchDpf = true;
+            const dpfVal = dpfFilter.value;
+            if (dpfVal) {
+                const dpfText = cells[21].innerText.trim(); // 
+                if (dpfVal === '2+') {
+                    const dpfNum = parseInt(dpfText);
+                    matchDpf = (dpfNum >= 2);
+                } else {
+                    matchDpf = (dpfText === dpfVal);
+                }
+            }
+
+            // --- 【重要】修改最终判断 ---
+            // 把所有条件加进去
+            if (matchSearch && matchBreed && matchSex && matchFarm && matchAge && matchProject && matchHealth && matchBlood && matchWeight && matchGen && matchDpf) {
                 row.style.display = "";
                 matchCount++;
             } else {
                 row.style.display = "none";
             }
         }
-        // console.log("筛选后显示的行数:", matchCount);
     }
 
     // 3. 监听事件
@@ -278,6 +826,12 @@
     sexFilter.addEventListener('change', filterTable);
     farmFilter.addEventListener('change', filterTable);
     ageFilter.addEventListener('change', filterTable);
+    projectFilter.addEventListener('change', filterTable);
+    healthFilter.addEventListener('change', filterTable);
+    bloodTypeFilter.addEventListener('change', filterTable);
+    weightRangeFilter.addEventListener('change', filterTable);
+    genFilter.addEventListener('change', filterTable);
+    dpfFilter.addEventListener('change', filterTable);
 
     // 4. 重置功能
     function resetFilters() {
@@ -286,7 +840,35 @@
         sexFilter.value = "";
         farmFilter.value = "";
         ageFilter.value = "";
+        projectFilter.value = "";
+        healthFilter.value = "";
+        bloodTypeFilter.value = "";
+        weightRangeFilter.value = "";
+        genFilter.value = "";
+        dpfFilter.value = "";
         filterTable();
+    }
+
+    // ============================
+    // 功能 3：导出与全选
+    // ============================
+    function toggleSelectAll() {
+        const selectAll = document.getElementById("selectAllPigs");
+        const checkboxes = document.querySelectorAll(".pig-checkbox");
+        checkboxes.forEach(cb => {
+            cb.checked = selectAll.checked;
+        });
+    }
+
+    function exportSelectedPigs() {
+        const checkboxes = document.querySelectorAll(".pig-checkbox:checked");
+        if (checkboxes.length === 0) {
+            alert("请先在左侧勾选需要导出的猪！");
+            return;
+        }
+        const ids = Array.from(checkboxes).map(cb => cb.value);
+        const url = "/export_pigs?ids=" + ids.join(",");
+        window.location.href = url;
     }
 </script>
 {% endblock %}
